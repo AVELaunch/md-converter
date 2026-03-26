@@ -1,0 +1,23 @@
+# Virtual environment
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+
+# macOS
+.DS_Store
+
+# Personal data (not part of the app)
+Books/
+Docs/
+converted/
+input/
+
+# Config with personal paths
+config.json

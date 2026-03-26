@@ -1,0 +1,81 @@
+#!/bin/bash
+# install.sh — Set up MD Converter with a local virtual environment
+#
+# Usage:
+#   cd md-converter
+#   bash install.sh
+#
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+VENV_DIR="$PROJECT_DIR/.venv"
+
+echo "=== MD Converter — Setup ==="
+echo ""
+
+# -------------------------------------------------------------------
+# Step 1: Check Python 3
+# -------------------------------------------------------------------
+if command -v python3 &>/dev/null; then
+    PY=$(command -v python3)
+    echo "[1/4] Python found: $PY ($(python3 --version 2>&1))"
+else
+    echo "[1/4] ERROR: python3 not found. Install Python 3.10+ first."
+    exit 1
+fi
+echo ""
+
+# -------------------------------------------------------------------
+# Step 2: Create virtual environment
+# -------------------------------------------------------------------
+if [ -d "$VENV_DIR" ]; then
+    echo "[2/4] Virtual environment already exists at .venv/"
+else
+    echo "[2/4] Creating virtual environment..."
+    python3 -m venv "$VENV_DIR"
+    echo "  Created .venv/"
+fi
+echo ""
+
+# -------------------------------------------------------------------
+# Step 3: Install Python dependencies
+# -------------------------------------------------------------------
+echo "[3/4] Installing Python dependencies..."
+"$VENV_DIR/bin/pip" install --upgrade pip -q
+"$VENV_DIR/bin/pip" install -r "$PROJECT_DIR/requirements.txt"
+echo ""
+
+# -------------------------------------------------------------------
+# Step 4: Check Tesseract (needed for scanned PDF OCR)
+# -------------------------------------------------------------------
+echo "[4/4] Checking Tesseract OCR..."
+if command -v tesseract &>/dev/null; then
+    echo "  Tesseract found: $(tesseract --version 2>&1 | head -1)"
+else
+    echo "  WARNING: Tesseract not found."
+    echo "  OCR for scanned PDFs won't work without it."
+    echo "  Install with: brew install tesseract"
+fi
+echo ""
+
+# -------------------------------------------------------------------
+# Create output directories
+# -------------------------------------------------------------------
+mkdir -p "$PROJECT_DIR/converted"
+mkdir -p "$PROJECT_DIR/input"
+
+# -------------------------------------------------------------------
+# Done
+# -------------------------------------------------------------------
+echo "=== Setup Complete ==="
+echo ""
+echo "To run the app:"
+echo "  Double-click launch.command in Finder"
+echo "  — or —"
+echo "  bash launch.command"
+echo ""
+echo "To run from command line:"
+echo "  .venv/bin/python3 src/converter_app.py file1.pdf file2.docx"
+echo ""
+echo "To build a standalone .app bundle:"
+echo "  bash scripts/build_app.sh"
