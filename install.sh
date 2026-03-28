@@ -18,9 +18,9 @@ echo ""
 # -------------------------------------------------------------------
 if command -v python3 &>/dev/null; then
     PY=$(command -v python3)
-    echo "[1/4] Python found: $PY ($(python3 --version 2>&1))"
+    echo "[1/6] Python found: $PY ($(python3 --version 2>&1))"
 else
-    echo "[1/4] ERROR: python3 not found. Install Python 3.10+ first."
+    echo "[1/6] ERROR: python3 not found. Install Python 3.10+ first."
     exit 1
 fi
 echo ""
@@ -29,9 +29,9 @@ echo ""
 # Step 2: Create virtual environment
 # -------------------------------------------------------------------
 if [ -d "$VENV_DIR" ]; then
-    echo "[2/4] Virtual environment already exists at .venv/"
+    echo "[2/6] Virtual environment already exists at .venv/"
 else
-    echo "[2/4] Creating virtual environment..."
+    echo "[2/6] Creating virtual environment..."
     python3 -m venv "$VENV_DIR"
     echo "  Created .venv/"
 fi
@@ -40,15 +40,23 @@ echo ""
 # -------------------------------------------------------------------
 # Step 3: Install Python dependencies
 # -------------------------------------------------------------------
-echo "[3/4] Installing Python dependencies..."
+echo "[3/6] Installing Python dependencies..."
 "$VENV_DIR/bin/pip" install --upgrade pip -q
 "$VENV_DIR/bin/pip" install -r "$PROJECT_DIR/requirements.txt"
 echo ""
 
 # -------------------------------------------------------------------
-# Step 4: Check Tesseract (needed for scanned PDF OCR)
+# Step 4: Install PyInstaller (needed for .app build)
 # -------------------------------------------------------------------
-echo "[4/4] Checking Tesseract OCR..."
+echo "[4/6] Installing PyInstaller..."
+"$VENV_DIR/bin/pip" install pyinstaller -q
+echo "  Done."
+echo ""
+
+# -------------------------------------------------------------------
+# Step 5: Check Tesseract (needed for scanned PDF OCR)
+# -------------------------------------------------------------------
+echo "[5/6] Checking Tesseract OCR..."
 if command -v tesseract &>/dev/null; then
     echo "  Tesseract found: $(tesseract --version 2>&1 | head -1)"
 else
@@ -65,17 +73,28 @@ mkdir -p "$PROJECT_DIR/converted"
 mkdir -p "$PROJECT_DIR/input"
 
 # -------------------------------------------------------------------
+# Step 6: Build .app and install to /Applications
+# -------------------------------------------------------------------
+echo "[6/6] Building MD Converter.app..."
+bash "$PROJECT_DIR/scripts/build_app.sh"
+
+APP_PATH="$PROJECT_DIR/src/dist/MD Converter.app"
+if [ -d "$APP_PATH" ]; then
+    echo ""
+    echo "Installing to /Applications..."
+    rm -rf "/Applications/MD Converter.app"
+    cp -R "$APP_PATH" "/Applications/MD Converter.app"
+    echo "  Installed: /Applications/MD Converter.app"
+fi
+echo ""
+
+# -------------------------------------------------------------------
 # Done
 # -------------------------------------------------------------------
 echo "=== Setup Complete ==="
 echo ""
-echo "To run the app:"
-echo "  Double-click launch.command in Finder"
-echo "  — or —"
-echo "  bash launch.command"
+echo "MD Converter is now in your Applications folder."
+echo "Open it from Launchpad, Spotlight, or Finder > Applications."
 echo ""
-echo "To run from command line:"
+echo "You can also run from the command line:"
 echo "  .venv/bin/python3 src/converter_app.py file1.pdf file2.docx"
-echo ""
-echo "To build a standalone .app bundle:"
-echo "  bash scripts/build_app.sh"

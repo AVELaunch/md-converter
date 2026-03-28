@@ -8,13 +8,14 @@ Scanned PDFs are handled automatically via Tesseract OCR.
 ## Quick Start (macOS)
 
 ```bash
-# 1. Install
+# 1. Clone
+git clone https://github.com/Gadamad/md-converter.git
+cd md-converter
+
+# 2. Install (creates venv, installs deps, builds .app, copies to /Applications)
 bash install.sh
 
-# 2. Run
-# Double-click scripts/launch.command in Finder
-# or:
-bash scripts/launch.command
+# 3. Open from Launchpad, Spotlight, or Finder > Applications
 ```
 
 ## Requirements
