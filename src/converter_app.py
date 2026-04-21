@@ -33,7 +33,11 @@ OUTPUT_DIR = APP_DIR / "converted"
 _CONFIG_PATH = APP_DIR / "config.json"
 _config = {}
 if _CONFIG_PATH.exists():
-    _config = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+    try:
+        _config = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"WARNING: ignoring invalid config.json: {exc}", file=sys.stderr)
+        _config = {}
 
 VAULT_DIR = (
     Path(_config["vault_path"]).expanduser()
@@ -64,8 +68,9 @@ def cli_mode(paths: list[str], vault: bool = True):
     print("-" * 85)
 
     for path in paths:
-        display = Path(path).name[:52]
-        if len(Path(path).name) > 55:
+        display_source = path if path.startswith(("http://", "https://")) else Path(path).name
+        display = display_source[:52]
+        if len(display_source) > 55:
             display += "..."
         try:
             r = route(path, OUTPUT_DIR, vault_dir)
@@ -81,7 +86,10 @@ def cli_mode(paths: list[str], vault: bool = True):
     print(f"SUMMARY: {ok}/{len(paths)} converted | {words:,} total words")
     print(f"Output: {OUTPUT_DIR.resolve()}")
     if vault:
-        print(f"Vault:  {VAULT_DIR.resolve()}")
+        if VAULT_DIR:
+            print(f"Vault:  {VAULT_DIR.resolve()}")
+        else:
+            print("Vault:  disabled (no config.json)")
 
 
 # ---------------------------------------------------------------------------

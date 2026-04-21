@@ -7,6 +7,12 @@
 #
 set -euo pipefail
 
+if [ "$(uname -s)" != "Darwin" ]; then
+    echo "ERROR: install.sh is for the macOS app setup."
+    echo "For CLI usage, create a virtual environment and install requirements.txt manually."
+    exit 1
+fi
+
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_DIR="$PROJECT_DIR/.venv"
 

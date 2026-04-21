@@ -1,82 +1,227 @@
 # MD Converter
 
-Convert PDF, DOCX, HTML, TXT, and RTF files to clean Markdown.
-Drag-and-drop GUI or command line. Runs 100% locally -- no API calls, no cloud.
+Turn PDFs, DOCX files, web pages, pasted text, TXT, and RTF into clean Markdown you can actually use.
 
-Scanned PDFs are handled automatically via Tesseract OCR.
+`MD Converter` gives you two ways to work:
 
-## Quick Start (macOS)
+- A simple macOS app with drag-and-drop, paste, and one-click output folders.
+- A command-line entry point for batch conversion and scripting.
+
+Everything runs locally on your machine. No API calls, no cloud upload, no hidden service dependency.
+
+## Why People Find It Useful
+
+- Convert research, notes, reports, and articles into Markdown for Obsidian or plain files.
+- OCR scanned PDFs locally with Tesseract.
+- Keep outputs organized automatically by input type.
+- Optionally copy finished Markdown into an Obsidian vault with frontmatter.
+
+## What It Supports
+
+| Input | What happens |
+| --- | --- |
+| PDF | Extracts selectable text, or falls back to OCR for scanned PDFs |
+| DOCX | Preserves headings, bold, italics, lists, quotes, and tables |
+| HTML / URL | Reads local HTML or fetches a URL and converts the main content to Markdown |
+| TXT | Wraps plain text in a clean Markdown document |
+| RTF | Converts RTF content into plain Markdown text |
+| Pasted text | Saves pasted text directly as Markdown from the app |
+
+## Quick Start For macOS Users
+
+This is the fastest path if you just want the app.
 
 ```bash
-# 1. Clone
 git clone https://github.com/Gadamad/md-converter.git
 cd md-converter
-
-# 2. Install (creates venv, installs deps, builds .app, copies to /Applications)
 bash install.sh
-
-# 3. Open from Launchpad, Spotlight, or Finder > Applications
 ```
 
-## Requirements
+What `install.sh` does:
 
-- macOS (GUI uses native WebKit via pywebview)
-- Python 3.10+
-- Tesseract OCR (optional, for scanned PDFs): `brew install tesseract`
+1. Checks for Python 3.
+2. Creates `.venv/`.
+3. Installs Python dependencies.
+4. Installs `pyinstaller`.
+5. Checks whether `tesseract` is available for scanned PDFs.
+6. Builds `MD Converter.app` and copies it to `/Applications`.
 
-## Command Line Usage
+After that, open `MD Converter` from Launchpad, Spotlight, or Finder.
+
+## Quick Start For CLI Users
+
+If you prefer the terminal:
 
 ```bash
-# Convert specific files
-.venv/bin/python3 src/converter_app.py document.pdf report.docx page.html
-
-# Convert a URL
-.venv/bin/python3 src/converter_app.py https://example.com/article
+git clone https://github.com/Gadamad/md-converter.git
+cd md-converter
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Output goes to `converted/` organized by file type (pdf/, docx/, html/, txt/, rtf/).
+Convert one or more files:
 
-## Obsidian Vault Delivery (Optional)
+```bash
+python3 src/converter_app.py document.pdf report.docx notes.txt
+```
 
-To auto-copy converted files to your Obsidian vault:
+Convert a URL:
+
+```bash
+python3 src/converter_app.py https://example.com/article
+```
+
+Output is written to `converted/` and grouped by type:
+
+```text
+converted/
+  pdf/
+  docx/
+  html/
+  txt/
+  rtf/
+```
+
+## GUI Walkthrough
+
+The app is designed for non-technical use:
+
+1. Drop files onto the window, or click to browse.
+2. Paste a URL to convert a web page.
+3. Paste plain text to save it as Markdown.
+4. Click `Convert`.
+5. Use `Open Output` to jump straight to the generated files.
+
+If an Obsidian vault is configured, you can also send copies there automatically.
+
+## Optional Obsidian Vault Delivery
+
+If you want converted files copied into an Obsidian vault:
 
 ```bash
 cp config.example.json config.json
-# Edit config.json and set your vault path
 ```
 
-## Build Standalone App
+Then edit `config.json`:
+
+```json
+{
+  "vault_path": "~/Documents/My-Obsidian-Vault/Converted"
+}
+```
+
+Notes:
+
+- `config.json` is optional.
+- `config.json` is git-ignored.
+- If no `config.json` is present, conversion still works normally and vault copying stays disabled.
+
+## What The Output Looks Like
+
+Each converted file gets:
+
+- A Markdown title.
+- A metadata header with source information.
+- Word count.
+- Optional extra metadata such as page count or OCR timing, depending on the source.
+
+If vault delivery is enabled, the copied version also gets YAML frontmatter for easier use in Obsidian.
+
+## OCR And Privacy
+
+- OCR uses local `tesseract`.
+- Scanned PDF support depends on `tesseract` being installed.
+- No document content is sent to a remote API by this project.
+
+Install Tesseract on macOS with:
 
 ```bash
-# Requires pyinstaller: pip install pyinstaller
-bash scripts/build_app.sh
-# Creates: src/dist/MD Converter.app
+brew install tesseract
 ```
 
-## Supported Formats
+## Limits And Expectations
 
-| Format | Features |
-|--------|----------|
-| PDF | Text extraction + OCR fallback for scanned pages |
-| DOCX | Headings, bold/italic, lists, tables preserved |
-| HTML | Fetches URLs or reads local files, strips nav/scripts |
-| TXT | Wraps in metadata header |
-| RTF | Strips RTF formatting to plain Markdown |
+- The GUI and installer are currently macOS-focused.
+- The app bundle build script is for macOS.
+- OCR is slower than normal text extraction because each PDF page is rendered and processed locally.
+- HTML conversion strips common layout noise such as `script`, `style`, `nav`, `header`, and `footer`, but some pages will still need cleanup depending on site structure.
+
+## Troubleshooting
+
+### The app installs but scanned PDFs do not work
+
+Install Tesseract:
+
+```bash
+brew install tesseract
+```
+
+### I only want local output, not Obsidian copies
+
+Do nothing. `config.json` is optional.
+
+### The CLI says vault delivery is disabled
+
+That is expected when `config.json` does not exist yet.
+
+### The app will not build
+
+Re-run:
+
+```bash
+bash install.sh
+```
+
+Or build manually:
+
+```bash
+bash scripts/build_app.sh
+```
+
+## Development
+
+Build the macOS app bundle:
+
+```bash
+bash scripts/build_app.sh
+```
+
+Run the basic CLI regression test:
+
+```bash
+python3 -m unittest tests/test_cli_mode.py
+```
 
 ## Project Structure
 
-```
+```text
 md-converter/
   src/
-    converter_app.py   # GUI app (pywebview)
-    converters.py      # All format converters
-    native_drop.py     # macOS native drag-and-drop
+    converter_app.py   # GUI + CLI entry point
+    converters.py      # Format conversion logic
+    native_drop.py     # Native macOS drag-and-drop support
   scripts/
-    install.sh         # Setup script
+    build_app.sh       # PyInstaller app build
+    generate_icon.py   # App icon generator
     launch.command     # Double-click launcher
-    build_app.sh       # PyInstaller build
-  converted/           # Output (created on first run)
-  config.json          # Your vault path (optional, git-ignored)
-  config.example.json  # Template
+  tests/
+    test_cli_mode.py   # CLI regression test
+  install.sh           # Main setup script
+  config.example.json  # Optional vault config template
   requirements.txt     # Python dependencies
 ```
+
+## Shareability Notes
+
+This repo is set up to be shareable:
+
+- Personal config is excluded via `config.json` in `.gitignore`.
+- Generated outputs are excluded.
+- Input/sample document folders used during local work are excluded.
+
+That keeps the public repo focused on the tool itself rather than personal data.
+
+## License
+
+MIT. See `LICENSE`.

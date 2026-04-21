@@ -2,10 +2,14 @@
 # build_app.sh — Package MD Converter as a macOS .app bundle
 #
 # Usage:
-#   cd "/Users/komphone/Mix /__Doc and PDF-OCR to MD/scripts"
-#   bash build_app.sh
+#   bash scripts/build_app.sh
 #
 set -euo pipefail
+
+if [ "$(uname -s)" != "Darwin" ]; then
+    echo "ERROR: build_app.sh is macOS-only."
+    exit 1
+fi
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPTS_DIR="$PROJECT_DIR/scripts"

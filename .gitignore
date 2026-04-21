@@ -13,11 +13,11 @@ build/
 # macOS
 .DS_Store
 
-# Personal data (not part of the app)
+# Personal data and generated content
 Books/
 Docs/
 converted/
 input/
 
-# Config with personal paths
+# Local config with personal paths
 config.json
