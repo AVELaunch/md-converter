@@ -36,7 +36,6 @@ def _find_ca_file() -> str:
     return certifi.where()
 
 _CA_FILE = _find_ca_file()
-os.environ["SSL_CERT_FILE"] = _CA_FILE
 
 import fitz  # PyMuPDF
 import requests
@@ -74,6 +73,9 @@ def _safe_get(url: str) -> FetchResult:
         raise ValueError("URL has no hostname")
     if _is_private_ip(parsed.hostname):
         raise ValueError(f"Request to private/reserved address blocked: {parsed.hostname}")
+
+    # Set SSL_CERT_FILE only when we actually make a request
+    os.environ["SSL_CERT_FILE"] = _CA_FILE
 
     resp = requests.get(
         url,
