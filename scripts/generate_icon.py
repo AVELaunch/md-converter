@@ -1,136 +1,61 @@
-#!/usr/bin/env python3
-"""Generate a macOS .icns icon for the MD Converter app."""
-
-import subprocess
-import tempfile
-from pathlib import Path
-
 from PIL import Image, ImageDraw, ImageFont
+from pathlib import Path
+import os, sys
 
+FONT_CANDIDATES = [
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/System/Library/Fonts/HelveticaNeue.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+]
+font_path = next((p for p in FONT_CANDIDATES if os.path.exists(p)), None)
+if not font_path:
+    sys.exit("No usable bold font found")
 
-def create_icon_png(size: int = 1024) -> Image.Image:
-    """Create a clean icon: dark rounded rect with white 'MD' text and arrow."""
+BG = (30, 41, 59, 255)
+FG = (255, 255, 255, 255)
+ACCENT = (56, 189, 248, 255)
+
+def make_icon(size):
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-
-    # Dark rounded rectangle background (#1e1e2e)
-    margin = int(size * 0.05)
-    radius = int(size * 0.18)
+    draw.rounded_rectangle([(0, 0), (size, size)], radius=int(size * 0.22), fill=BG)
+    text_font = ImageFont.truetype(font_path, int(size * 0.30))
+    arrow_font = ImageFont.truetype(font_path, int(size * 0.36))
+    md_bbox = draw.textbbox((0, 0), "MD", font=text_font)
+    md_w, md_h = md_bbox[2]-md_bbox[0], md_bbox[3]-md_bbox[1]
+    arrow = "\u2193"
+    a_bbox = draw.textbbox((0, 0), arrow, font=arrow_font)
+    a_w, a_h = a_bbox[2]-a_bbox[0], a_bbox[3]-a_bbox[1]
+    dot_size = int(size * 0.08)
+    dot_gap = int(size * 0.02)
+    arrow_gap = int(size * 0.025)
+    total_w = dot_size + dot_gap + md_w + arrow_gap + a_w
+    start_x = (size - total_w) // 2
+    center_y = size // 2
+    md_top = center_y - md_h // 2
+    md_bottom = md_top + md_h
+    dot_x = start_x
+    dot_y = md_bottom - dot_size
     draw.rounded_rectangle(
-        [margin, margin, size - margin, size - margin],
-        radius=radius,
-        fill=(30, 30, 46, 255),
+        [(dot_x, dot_y), (dot_x + dot_size, dot_y + dot_size)],
+        radius=int(dot_size * 0.15), fill=FG,
     )
-
-    # "MD" text - large, centered, white
-    md_font_size = int(size * 0.35)
-    try:
-        md_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", md_font_size)
-    except (OSError, IOError):
-        md_font = ImageFont.load_default()
-
-    md_text = "MD"
-    md_bbox = draw.textbbox((0, 0), md_text, font=md_font)
-    md_w = md_bbox[2] - md_bbox[0]
-    md_h = md_bbox[3] - md_bbox[1]
-    md_x = (size - md_w) // 2
-    md_y = (size - md_h) // 2 - int(size * 0.06)
-    draw.text((md_x, md_y), md_text, fill=(255, 255, 255, 255), font=md_font)
-
-    # Conversion arrow below the text (a simple right-pointing arrow)
-    arrow_y = md_y + md_h + int(size * 0.06)
-    arrow_cx = size // 2
-    arrow_len = int(size * 0.20)
-    arrow_head = int(size * 0.04)
-    line_width = max(int(size * 0.02), 3)
-    arrow_color = (166, 173, 200, 255)  # #a6adc8
-
-    # Arrow shaft
-    draw.line(
-        [(arrow_cx - arrow_len // 2, arrow_y), (arrow_cx + arrow_len // 2, arrow_y)],
-        fill=arrow_color,
-        width=line_width,
-    )
-    # Arrow head (triangle)
-    tip_x = arrow_cx + arrow_len // 2
-    draw.polygon(
-        [
-            (tip_x, arrow_y - arrow_head),
-            (tip_x + arrow_head + 2, arrow_y),
-            (tip_x, arrow_y + arrow_head),
-        ],
-        fill=arrow_color,
-    )
-
-    # Small label below arrow
-    label_size = int(size * 0.08)
-    try:
-        label_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", label_size)
-    except (OSError, IOError):
-        label_font = ImageFont.load_default()
-
-    label = "CONVERTER"
-    lb = draw.textbbox((0, 0), label, font=label_font)
-    lw = lb[2] - lb[0]
-    draw.text(
-        ((size - lw) // 2, arrow_y + int(size * 0.04)),
-        label,
-        fill=(108, 112, 134, 255),  # #6c7086
-        font=label_font,
-    )
-
+    md_x = dot_x + dot_size + dot_gap - md_bbox[0]
+    md_y = center_y - md_h // 2 - md_bbox[1]
+    draw.text((md_x, md_y), "MD", font=text_font, fill=FG)
+    a_x = md_x + md_w + arrow_gap - a_bbox[0]
+    a_y = center_y - a_h // 2 - a_bbox[1]
+    draw.text((a_x, a_y), arrow, font=arrow_font, fill=ACCENT)
     return img
 
-
-def png_to_icns(png_path: Path, icns_path: Path):
-    """Convert a 1024x1024 PNG to .icns using macOS iconutil."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        iconset = Path(tmpdir) / "icon.iconset"
-        iconset.mkdir()
-
-        img = Image.open(png_path)
-
-        # Required icon sizes for macOS .iconset
-        sizes = [16, 32, 64, 128, 256, 512, 1024]
-        for s in sizes:
-            resized = img.resize((s, s), Image.LANCZOS)
-            resized.save(iconset / f"icon_{s}x{s}.png")
-            # @2x variants
-            if s <= 512:
-                resized2x = img.resize((s * 2, s * 2), Image.LANCZOS)
-                resized2x.save(iconset / f"icon_{s}x{s}@2x.png")
-
-        # Rename 1024 to 512@2x (required by iconutil)
-        src_1024 = iconset / "icon_1024x1024.png"
-        dst_512_2x = iconset / "icon_512x512@2x.png"
-        if src_1024.exists() and not dst_512_2x.exists():
-            src_1024.rename(dst_512_2x)
-        elif src_1024.exists():
-            src_1024.unlink()
-
-        result = subprocess.run(
-            ["iconutil", "-c", "icns", str(iconset), "-o", str(icns_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"iconutil failed: {result.stderr}")
-
-
-def main():
-    scripts_dir = Path(__file__).resolve().parent
-    png_path = scripts_dir / "icon.png"
-    icns_path = scripts_dir / "icon.icns"
-
-    print("Generating 1024x1024 icon PNG...")
-    icon = create_icon_png(1024)
-    icon.save(str(png_path), "PNG")
-    print(f"  Saved: {png_path}")
-
-    print("Converting to .icns...")
-    png_to_icns(png_path, icns_path)
-    print(f"  Saved: {icns_path}")
-
-
-if __name__ == "__main__":
-    main()
+out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("assets/icon.iconset")
+out_dir.mkdir(parents=True, exist_ok=True)
+for size, name in [
+    (16, "icon_16x16.png"), (32, "icon_16x16@2x.png"),
+    (32, "icon_32x32.png"), (64, "icon_32x32@2x.png"),
+    (128, "icon_128x128.png"), (256, "icon_128x128@2x.png"),
+    (256, "icon_256x256.png"), (512, "icon_256x256@2x.png"),
+    (512, "icon_512x512.png"), (1024, "icon_512x512@2x.png"),
+]:
+    make_icon(size).save(out_dir / name)
+print(f"Wrote {len(list(out_dir.iterdir()))} icon files to {out_dir}")
