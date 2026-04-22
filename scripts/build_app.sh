@@ -1,6 +1,10 @@
 #!/bin/bash
 # build_app.sh — Package MD Converter as a macOS .app bundle
 #
+# TODO: bundle Marker (--collect-all marker surya transformers),
+# certifi CA bundle, and torch data files before cutting a release.
+# Currently frozen builds fall back to Tesseract for scanned PDFs.
+#
 # Usage:
 #   bash scripts/build_app.sh
 #

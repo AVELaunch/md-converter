@@ -33,3 +33,9 @@ Fork-specific changes. This fork originated from https://github.com/Gadamad/md-c
 
 ### Removed
 - Legacy root-level scripts: `pdf_to_md.py`, `pdf_ocr_to_md.py`, `docx_to_md.py` (superseded by `src/converters.py`).
+
+### Known Issues
+- Frozen `.app` builds produced by `build_app.sh` do not currently bundle
+  Marker OCR dependencies, certifi CA bundle, or torch data files.
+  Scanned-PDF conversion in frozen builds will fall back to Tesseract.
+  To be resolved before the first tagged release — see build script TODO.
