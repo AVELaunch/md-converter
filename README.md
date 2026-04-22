@@ -130,9 +130,17 @@ If vault delivery is enabled, the copied version also gets YAML frontmatter for 
 
 ## OCR And Privacy
 
-- OCR uses local `tesseract`.
-- Scanned PDF support depends on `tesseract` being installed.
-- No document content is sent to a remote API by this project.
+OCR uses a two-tier local pipeline:
+
+1. **Marker** (primary) — deep-learning OCR via `marker-pdf`. High accuracy, handles complex layouts. Downloads ~1 GB of model weights to `~/.cache/` on first run.
+2. **Tesseract** (fallback) — traditional OCR via `pytesseract`. Used if Marker is not installed or fails.
+
+No document content is sent to any cloud service, ever. No API keys, no accounts, no rate limits, no content-policy filters. Works on any document you own.
+
+You can control which engine is used:
+
+- Set `"ocr_engine"` in `config.json` to `"auto"` (default), `"marker"`, or `"tesseract"`.
+- Or set the `MD_CONVERTER_OCR` environment variable (overrides config).
 
 Install Tesseract on macOS with:
 

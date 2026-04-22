@@ -173,6 +173,31 @@ class TestUserDataDir(unittest.TestCase):
                     sys.modules[name] = orig
 
 
+class TestOcrEngineSelection(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("tesseract"), "tesseract not installed")
+    def test_tesseract_engine_skips_marker(self):
+        """With OCR_ENGINE='tesseract', Marker should never be called."""
+        with mock.patch.object(converters, "OCR_ENGINE", "tesseract"):
+            with mock.patch.object(converters, "_get_ocr_engine", return_value="tesseract"):
+                with mock.patch.object(converters, "_convert_pdf_marker") as mock_marker:
+                    mock_marker.side_effect = AssertionError("Marker should not be called")
+                    with tempfile.TemporaryDirectory() as td:
+                        r = converters.convert_pdf(str(FIXTURES / "sample_scanned.pdf"), Path(td))
+                        self.assertTrue(r.success)
+                        mock_marker.assert_not_called()
+
+    @unittest.skipUnless(shutil.which("tesseract"), "tesseract not installed")
+    def test_auto_falls_back_to_tesseract_on_marker_failure(self):
+        """With OCR_ENGINE='auto', if Marker fails, Tesseract takes over."""
+        with mock.patch.object(converters, "_get_ocr_engine", return_value="auto"):
+            with mock.patch.object(converters, "_convert_pdf_marker",
+                                   side_effect=RuntimeError("simulated failure")):
+                with tempfile.TemporaryDirectory() as td:
+                    r = converters.convert_pdf(str(FIXTURES / "sample_scanned.pdf"), Path(td))
+                    self.assertTrue(r.success)
+                    self.assertGreater(r.word_count, 0)
+
+
 class TestSafeGet(unittest.TestCase):
     def test_rejects_file_scheme(self):
         with self.assertRaises(ValueError):

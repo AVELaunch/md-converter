@@ -79,6 +79,14 @@ mkdir -p "$PROJECT_DIR/converted"
 mkdir -p "$PROJECT_DIR/input"
 
 # -------------------------------------------------------------------
+# Optional: pre-fetch Marker OCR models
+# -------------------------------------------------------------------
+if [ "${MD_CONVERTER_PREFETCH:-0}" = "1" ]; then
+    echo "Pre-fetching Marker models (this may take a few minutes)..."
+    "$VENV_DIR/bin/python3" -c "from marker.models import create_model_dict; create_model_dict()"
+fi
+
+# -------------------------------------------------------------------
 # Step 6: Build .app and install to /Applications
 # -------------------------------------------------------------------
 echo "[6/6] Building MD Converter.app..."

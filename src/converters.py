@@ -6,6 +6,7 @@ Five format converters with shared utilities for consistent output.
 
 import ipaddress
 import json as _json
+import logging
 import os
 import re
 import shutil
@@ -15,6 +16,8 @@ import time
 from datetime import date
 from pathlib import Path
 from typing import NamedTuple
+
+logger = logging.getLogger("md_converter.converters")
 
 import certifi
 
@@ -207,6 +210,32 @@ def write_output(
 
 
 # ---------------------------------------------------------------------------
+# OCR engine selection
+# ---------------------------------------------------------------------------
+
+# Priority: MD_CONVERTER_OCR env var > config.json "ocr_engine" > "auto"
+OCR_ENGINE: str | None = os.environ.get("MD_CONVERTER_OCR", "").lower() or None
+
+
+def _get_ocr_engine() -> str:
+    """Return the effective OCR engine name."""
+    if OCR_ENGINE is not None:
+        return OCR_ENGINE
+    # Try reading from config.json (converter_app sets _CONFIG_PATH,
+    # but converters.py may be used standalone — look for config in parent dir)
+    config_path = Path(__file__).resolve().parent.parent / "config.json"
+    if config_path.exists():
+        try:
+            cfg = _json.loads(config_path.read_text(encoding="utf-8"))
+            engine = cfg.get("ocr_engine", "auto")
+            if isinstance(engine, str):
+                return engine.lower()
+        except (ValueError, OSError):
+            pass
+    return "auto"
+
+
+# ---------------------------------------------------------------------------
 # Format routing
 # ---------------------------------------------------------------------------
 
@@ -264,7 +293,21 @@ def convert_pdf(path: str, output_dir: Path, vault_dir: Path | None = None) -> C
 
     # Auto-fallback to OCR
     if total_words == 0:
-        return _convert_pdf_ocr(path, output_dir, vault_dir)
+        engine = _get_ocr_engine()
+        logger.info("No selectable text in %s — OCR engine: %s", Path(path).name, engine)
+        if engine == "tesseract":
+            return _convert_pdf_tesseract(path, output_dir, vault_dir)
+        elif engine == "marker":
+            return _convert_pdf_marker(path, output_dir, vault_dir)
+        else:  # "auto" — try Marker first, fall back to Tesseract
+            try:
+                result = _convert_pdf_marker(path, output_dir, vault_dir)
+                if result.success:
+                    return result
+                logger.warning("Marker returned empty for %s, falling back to Tesseract", Path(path).name)
+            except Exception as exc:
+                logger.warning("Marker failed for %s (%s), falling back to Tesseract", Path(path).name, exc)
+            return _convert_pdf_tesseract(path, output_dir, vault_dir)
 
     body_lines = []
     for num, text in pages:
@@ -279,8 +322,40 @@ def convert_pdf(path: str, output_dir: Path, vault_dir: Path | None = None) -> C
     )
 
 
-def _convert_pdf_ocr(path: str, output_dir: Path, vault_dir: Path | None = None) -> ConvertResult:
-    """OCR fallback for scanned PDFs."""
+def _convert_pdf_marker(path: str, output_dir: Path, vault_dir: Path | None = None) -> ConvertResult:
+    """OCR via Marker (local deep-learning models)."""
+    try:
+        from marker.converters.pdf import PdfConverter
+        from marker.models import create_model_dict
+        from marker.output import text_from_rendered
+    except ImportError:
+        return ConvertResult(False, "", 0, "ERROR: marker-pdf not installed")
+
+    logger.info("Downloading OCR model (~1 GB, first run only)...")
+    start = time.time()
+    converter = PdfConverter(artifact_dict=create_model_dict())
+    rendered = converter(path)
+    body, _metadata, _images = text_from_rendered(rendered)
+    elapsed = time.time() - start
+    word_count = len(body.split())
+    logger.info("Marker finished in %.1fs — %d words extracted", elapsed, word_count)
+
+    if word_count == 0:
+        return ConvertResult(False, "", 0, "Marker returned empty")
+
+    p = Path(path)
+    return write_output(
+        body, p.stem, p.name, word_count, output_dir, "pdf", vault_dir,
+        header_extras={
+            "Pages": str(len(fitz.open(path))),
+            "Extracted via": "Marker (local)",
+            "Processing time": f"{elapsed:.1f}s",
+        },
+    )
+
+
+def _convert_pdf_tesseract(path: str, output_dir: Path, vault_dir: Path | None = None) -> ConvertResult:
+    """OCR fallback for scanned PDFs using Tesseract."""
     try:
         import pytesseract
         from PIL import Image
