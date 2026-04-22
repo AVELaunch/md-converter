@@ -4,15 +4,16 @@ Universal Markdown Converters
 Five format converters with shared utilities for consistent output.
 """
 
+import ipaddress
+import os
 import re
 import shutil
+import socket
+import ssl
 import time
 from datetime import date
 from pathlib import Path
 from typing import NamedTuple
-
-import os
-import ssl
 
 import certifi
 
@@ -39,6 +40,71 @@ os.environ["SSL_CERT_FILE"] = _CA_FILE
 
 import fitz  # PyMuPDF
 import requests
+
+# Maximum response size for URL fetches (50 MB)
+_MAX_RESPONSE_BYTES = 50 * 1024 * 1024
+
+
+class FetchResult(NamedTuple):
+    content: bytes
+    encoding: str
+
+
+def _is_private_ip(host: str) -> bool:
+    """Check if any resolved IP for *host* is private/reserved."""
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        raise ValueError(f"Cannot resolve hostname: {host}")
+    for info in infos:
+        addr = ipaddress.ip_address(info[4][0])
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved or addr.is_multicast:
+            return True
+    return False
+
+
+def _safe_get(url: str) -> FetchResult:
+    """Fetch *url* with SSRF guards, redirect validation, and size cap."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
+    if not parsed.hostname:
+        raise ValueError("URL has no hostname")
+    if _is_private_ip(parsed.hostname):
+        raise ValueError(f"Request to private/reserved address blocked: {parsed.hostname}")
+
+    resp = requests.get(
+        url,
+        stream=True,
+        timeout=30,
+        headers={"User-Agent": "MDConverter/1.0"},
+        verify=_CA_FILE,
+        allow_redirects=True,
+    )
+    resp.raise_for_status()
+
+    # Validate every redirect hop
+    for hop in resp.history:
+        hop_host = urlparse(hop.url).hostname
+        if hop_host and _is_private_ip(hop_host):
+            raise ValueError("Redirect to private address blocked")
+
+    # Read with size cap
+    chunks = []
+    total = 0
+    for chunk in resp.iter_content(chunk_size=65536):
+        total += len(chunk)
+        if total > _MAX_RESPONSE_BYTES:
+            resp.close()
+            raise ValueError(f"Response exceeds {_MAX_RESPONSE_BYTES // (1024 * 1024)} MB limit")
+        chunks.append(chunk)
+
+    return FetchResult(
+        content=b"".join(chunks),
+        encoding=resp.encoding or "utf-8",
+    )
 from bs4 import BeautifulSoup
 from docx import Document
 from docx.table import Table as DocxTable
@@ -350,9 +416,8 @@ def convert_html(path_or_url: str, output_dir: Path, vault_dir: Path | None = No
     is_url = path_or_url.startswith("http://") or path_or_url.startswith("https://")
 
     if is_url:
-        resp = requests.get(path_or_url, timeout=30, headers={"User-Agent": "MDConverter/1.0"}, verify=_CA_FILE)
-        resp.raise_for_status()
-        html = resp.text
+        result = _safe_get(path_or_url)
+        html = result.content.decode(result.encoding, errors="replace")
         soup = BeautifulSoup(html, "html.parser")
         title = soup.title.string.strip() if soup.title and soup.title.string else path_or_url
         source = path_or_url
