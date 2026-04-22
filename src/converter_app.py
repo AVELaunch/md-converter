@@ -6,6 +6,7 @@ Converts to Markdown, organizes by type, delivers to Obsidian vault.
 """
 
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -25,12 +26,32 @@ except ImportError:
 # Paths
 # ---------------------------------------------------------------------------
 
-APP_DIR = Path(__file__).resolve().parent.parent
-OUTPUT_DIR = APP_DIR / "converted"
 
-# Vault path: loaded from config.json if it exists, otherwise disabled.
-# Copy config.example.json -> config.json and set your Obsidian vault path.
-_CONFIG_PATH = APP_DIR / "config.json"
+def user_data_dir() -> Path:
+    """Return a writable per-user data directory, creating it if needed.
+
+    macOS:  ~/Library/Application Support/MD Converter
+    Other:  $XDG_DATA_HOME/md-converter or ~/.local/share/md-converter
+    """
+    if sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support" / "MD Converter"
+    else:
+        xdg = os.environ.get("XDG_DATA_HOME")
+        base = Path(xdg) / "md-converter" if xdg else Path.home() / ".local" / "share" / "md-converter"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+APP_DIR = Path(__file__).resolve().parent.parent
+_FROZEN = getattr(sys, "frozen", False)
+
+if _FROZEN:
+    _DATA_DIR = user_data_dir()
+    OUTPUT_DIR = _DATA_DIR / "converted"
+    _CONFIG_PATH = _DATA_DIR / "config.json"
+else:
+    OUTPUT_DIR = APP_DIR / "converted"
+    _CONFIG_PATH = APP_DIR / "config.json"
 _config = {}
 if _CONFIG_PATH.exists():
     try:

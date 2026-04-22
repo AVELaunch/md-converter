@@ -100,6 +100,53 @@ class TestConvertRtf(unittest.TestCase):
             self.assertIn("# ", content)
 
 
+class TestUserDataDir(unittest.TestCase):
+    def test_frozen_paths_use_user_data_dir(self):
+        """When sys.frozen is True, OUTPUT_DIR should be under ~/Library/Application Support/MD Converter/."""
+        import importlib.util
+        import types
+
+        # Stub out heavy imports that converter_app.py pulls in
+        webview_stub = types.ModuleType("webview")
+        converters_stub = types.ModuleType("converters")
+        native_drop_stub = types.ModuleType("native_drop")
+
+        from collections import namedtuple
+        convert_result = namedtuple("ConvertResult", "success output_path word_count message")
+        converters_stub.SUPPORTED = {".txt"}
+        converters_stub.ConvertResult = convert_result
+        converters_stub.route = lambda *a, **kw: None
+        converters_stub.convert_pasted = lambda *a, **kw: None
+        native_drop_stub.setup_native_drop = lambda *a, **kw: None
+
+        saved = {}
+        for name in ("webview", "converters", "native_drop"):
+            saved[name] = sys.modules.get(name)
+            sys.modules[name] = {"webview": webview_stub, "converters": converters_stub, "native_drop": native_drop_stub}[name]
+
+        module_path = Path(__file__).resolve().parents[1] / "src" / "converter_app.py"
+        spec = importlib.util.spec_from_file_location("test_converter_app_frozen", module_path)
+        mod = importlib.util.module_from_spec(spec)
+
+        # Simulate frozen build
+        original_frozen = getattr(sys, "frozen", None)
+        sys.frozen = True
+        try:
+            spec.loader.exec_module(mod)
+            expected_base = Path.home() / "Library" / "Application Support" / "MD Converter"
+            self.assertTrue(str(mod.OUTPUT_DIR).startswith(str(expected_base)))
+        finally:
+            if original_frozen is None:
+                del sys.frozen
+            else:
+                sys.frozen = original_frozen
+            for name, orig in saved.items():
+                if orig is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = orig
+
+
 class TestSafeGet(unittest.TestCase):
     def test_rejects_file_scheme(self):
         with self.assertRaises(ValueError):
