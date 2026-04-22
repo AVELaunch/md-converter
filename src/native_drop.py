@@ -6,8 +6,11 @@ get routed to Python with real file paths.
 
 import ctypes
 import ctypes.util
+import logging
 import threading
 import time
+
+logger = logging.getLogger("md_converter.native_drop")
 
 import objc
 from AppKit import (
@@ -79,7 +82,7 @@ def setup_native_drop(webview_window, callback, delay=2.0):
                 break
 
         if target_view is None:
-            print("[native_drop] WebKitHost not found")
+            logger.warning("WebKitHost not found")
             return False
 
         # Get the raw ObjC class pointer via ctypes
@@ -90,7 +93,7 @@ def setup_native_drop(webview_window, callback, delay=2.0):
         sel = _libobjc.sel_registerName(b"performDragOperation:")
         method = _libobjc.class_getInstanceMethod(cls_ptr, sel)
         if not method:
-            print("[native_drop] performDragOperation: not found")
+            logger.warning("performDragOperation: not found")
             return False
 
         # Save original implementation
@@ -119,7 +122,7 @@ def setup_native_drop(webview_window, callback, delay=2.0):
                     ).start()
                     return True
             except Exception as e:
-                print(f"[native_drop] drop handler error: {e}")
+                logger.error("drop handler error: %s", e)
 
             # Fall back to original
             if _orig_perform_imp:
@@ -137,5 +140,5 @@ def setup_native_drop(webview_window, callback, delay=2.0):
         return True
 
     except Exception as e:
-        print(f"[native_drop] setup failed: {e}")
+        logger.error("setup failed: %s", e)
         return False

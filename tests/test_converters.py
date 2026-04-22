@@ -100,6 +100,32 @@ class TestConvertRtf(unittest.TestCase):
             self.assertIn("# ", content)
 
 
+class TestVaultFrontmatter(unittest.TestCase):
+    def test_escapes_quotes_and_newlines(self):
+        """Title with quotes and newlines round-trips through YAML."""
+        import yaml
+
+        title = 'Book "Title"\nSubtitle'
+        source = 'file\\with"quotes.pdf'
+        fm = converters.vault_frontmatter(title, "pdf", source)
+        # Extract the YAML between --- delimiters
+        parts = fm.split("---")
+        self.assertGreaterEqual(len(parts), 3)
+        data = yaml.safe_load(parts[1])
+        self.assertEqual(data["title"], title)
+        self.assertEqual(data["source"], source)
+
+    def test_plain_values_unchanged(self):
+        """Simple values without special chars still work."""
+        import yaml
+
+        fm = converters.vault_frontmatter("Simple Title", "docx", "file.docx")
+        parts = fm.split("---")
+        data = yaml.safe_load(parts[1])
+        self.assertEqual(data["title"], "Simple Title")
+        self.assertEqual(data["source"], "file.docx")
+
+
 class TestUserDataDir(unittest.TestCase):
     def test_frozen_paths_use_user_data_dir(self):
         """When sys.frozen is True, OUTPUT_DIR should be under ~/Library/Application Support/MD Converter/."""

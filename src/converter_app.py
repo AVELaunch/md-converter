@@ -6,11 +6,14 @@ Converts to Markdown, organizes by type, delivers to Obsidian vault.
 """
 
 import json
+import logging
 import os
 import subprocess
 import sys
 import threading
 from pathlib import Path
+
+logger = logging.getLogger("md_converter")
 
 import webview
 
@@ -420,8 +423,8 @@ class Api:
         if self.window:
             try:
                 self.window.evaluate_js(code)
-            except Exception:
-                pass
+            except (RuntimeError, OSError) as exc:
+                logger.warning("JS eval failed: %s", exc)
 
     def _log(self, text: str, tag: str = "log-info"):
         safe = json.dumps(text)
@@ -441,7 +444,8 @@ class Api:
             try:
                 val = self.window.evaluate_js("getVaultChecked()")
                 return bool(val)
-            except Exception:
+            except (RuntimeError, OSError) as exc:
+                logger.warning("Could not read vault checkbox: %s", exc)
                 return True
         return True
 
@@ -504,8 +508,8 @@ class Api:
         try:
             proc = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
             proc.communicate(text.encode("utf-8"))
-        except Exception:
-            pass
+        except (OSError, subprocess.SubprocessError) as exc:
+            logger.warning("Clipboard copy failed: %s", exc)
 
     def close_window(self):
         if self.window:
@@ -527,10 +531,11 @@ class Api:
             tag = "log-ok" if r.success else "log-error"
             self._log(f"  {r.message} ({r.word_count:,} words)", tag)
         except Exception as e:
+            logger.error("Paste conversion failed: %s", e, exc_info=True)
             self._log(f"  ERROR: {e}", "log-error")
 
         self._set_progress(100)
-        self._set_summary(f"Done: 1 item converted")
+        self._set_summary("Done: 1 item converted")
 
     # -- worker (runs in background thread) --
 
@@ -557,6 +562,7 @@ class Api:
                     tag = "log-error"
                 self._log(f"  {r.message} ({r.word_count:,} words)", tag)
             except Exception as e:
+                logger.error("Conversion failed for %s: %s", path, e, exc_info=True)
                 self._log(f"  ERROR: {e}", "log-error")
 
             pct = ((i + 1) / total) * 100
@@ -573,6 +579,12 @@ class Api:
 # ---------------------------------------------------------------------------
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
+
     # CLI mode: arguments provided
     if len(sys.argv) > 1:
         cli_mode(sys.argv[1:])

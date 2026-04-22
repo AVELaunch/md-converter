@@ -5,6 +5,7 @@ Five format converters with shared utilities for consistent output.
 """
 
 import ipaddress
+import json as _json
 import os
 import re
 import shutil
@@ -151,14 +152,26 @@ def build_header(title: str, source: str, word_count: int, **extras) -> str:
     return "\n".join(lines)
 
 
+def _yaml_safe(value: str) -> str:
+    """Return *value* quoted safely for use as a YAML scalar.
+
+    If the value contains characters that could break YAML parsing
+    (quotes, backslashes, newlines, or leading special chars), wrap it
+    with json.dumps which produces a valid YAML double-quoted string.
+    """
+    if any(c in value for c in ('"', '\\', '\n', '\r')) or (value and value[0] in '&*?|>{[!%@`'):
+        return _json.dumps(value)
+    return f'"{value}"'
+
+
 def vault_frontmatter(title: str, source_type: str, source_file: str) -> str:
     """Generate Obsidian-compatible YAML frontmatter."""
     return (
         f"---\n"
-        f'title: "{title}"\n'
+        f"title: {_yaml_safe(title)}\n"
         f"tags: [converted, {source_type}]\n"
         f"created: {date.today().isoformat()}\n"
-        f'source: "{source_file}"\n'
+        f"source: {_yaml_safe(source_file)}\n"
         f"---\n\n"
     )
 
