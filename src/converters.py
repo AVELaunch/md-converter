@@ -12,6 +12,7 @@ import re
 import shutil
 import socket
 import ssl
+import sys
 import time
 from datetime import date
 from pathlib import Path
@@ -91,11 +92,14 @@ def _safe_get(url: str) -> FetchResult:
     )
     resp.raise_for_status()
 
-    # Validate every redirect hop
+    # Validate every redirect hop and the final landed URL
     for hop in resp.history:
         hop_host = urlparse(hop.url).hostname
         if hop_host and _is_private_ip(hop_host):
             raise ValueError("Redirect to private address blocked")
+    final_host = urlparse(str(resp.url)).hostname
+    if final_host and _is_private_ip(final_host):
+        raise ValueError("Redirect to private address blocked")
 
     # Read with size cap
     chunks = []
@@ -210,6 +214,42 @@ def write_output(
 
 
 # ---------------------------------------------------------------------------
+# Marker converter cache
+# ---------------------------------------------------------------------------
+
+_MARKER_CONVERTER = None
+_MARKER_LOADED = False
+
+
+def _get_marker_converter():
+    """Return a cached PdfConverter, loading models on first call."""
+    global _MARKER_CONVERTER, _MARKER_LOADED
+    if _MARKER_CONVERTER is None:
+        from marker.converters.pdf import PdfConverter
+        from marker.models import create_model_dict
+        if not _MARKER_LOADED:
+            logger.info("Loading Marker models (first run downloads ~1 GB)...")
+        else:
+            logger.debug("Reusing cached Marker converter")
+        _MARKER_CONVERTER = PdfConverter(artifact_dict=create_model_dict())
+        _MARKER_LOADED = True
+    return _MARKER_CONVERTER
+
+
+# ---------------------------------------------------------------------------
+# Config path resolution
+# ---------------------------------------------------------------------------
+
+def _config_path() -> Path:
+    """Return the config.json path, respecting frozen builds."""
+    if getattr(sys, "frozen", False):
+        base = Path.home() / "Library" / "Application Support" / "MD Converter"
+        base.mkdir(parents=True, exist_ok=True)
+        return base / "config.json"
+    return Path(__file__).resolve().parent.parent / "config.json"
+
+
+# ---------------------------------------------------------------------------
 # OCR engine selection
 # ---------------------------------------------------------------------------
 
@@ -221,12 +261,10 @@ def _get_ocr_engine() -> str:
     """Return the effective OCR engine name."""
     if OCR_ENGINE is not None:
         return OCR_ENGINE
-    # Try reading from config.json (converter_app sets _CONFIG_PATH,
-    # but converters.py may be used standalone — look for config in parent dir)
-    config_path = Path(__file__).resolve().parent.parent / "config.json"
-    if config_path.exists():
+    config = _config_path()
+    if config.exists():
         try:
-            cfg = _json.loads(config_path.read_text(encoding="utf-8"))
+            cfg = _json.loads(config.read_text(encoding="utf-8"))
             engine = cfg.get("ocr_engine", "auto")
             if isinstance(engine, str):
                 return engine.lower()
@@ -325,15 +363,12 @@ def convert_pdf(path: str, output_dir: Path, vault_dir: Path | None = None) -> C
 def _convert_pdf_marker(path: str, output_dir: Path, vault_dir: Path | None = None) -> ConvertResult:
     """OCR via Marker (local deep-learning models)."""
     try:
-        from marker.converters.pdf import PdfConverter
-        from marker.models import create_model_dict
         from marker.output import text_from_rendered
     except ImportError:
         return ConvertResult(False, "", 0, "ERROR: marker-pdf not installed")
 
-    logger.info("Downloading OCR model (~1 GB, first run only)...")
     start = time.time()
-    converter = PdfConverter(artifact_dict=create_model_dict())
+    converter = _get_marker_converter()
     rendered = converter(path)
     body, _metadata, _images = text_from_rendered(rendered)
     elapsed = time.time() - start
@@ -344,10 +379,12 @@ def _convert_pdf_marker(path: str, output_dir: Path, vault_dir: Path | None = No
         return ConvertResult(False, "", 0, "Marker returned empty")
 
     p = Path(path)
+    with fitz.open(path) as _doc:
+        page_count = len(_doc)
     return write_output(
         body, p.stem, p.name, word_count, output_dir, "pdf", vault_dir,
         header_extras={
-            "Pages": str(len(fitz.open(path))),
+            "Pages": str(page_count),
             "Extracted via": "Marker (local)",
             "Processing time": f"{elapsed:.1f}s",
         },
@@ -449,7 +486,7 @@ def _para_to_md(para) -> str:
 def _table_to_md(table: DocxTable) -> str:
     rows = []
     for row in table.rows:
-        cells = [c.text.strip().replace("\n", " ") for c in row.cells]
+        cells = [c.text.strip().replace("\n", " ").replace("|", "\\|") for c in row.cells]
         rows.append(cells)
     if not rows:
         return ""
