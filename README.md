@@ -195,10 +195,10 @@ Build the macOS app bundle:
 bash scripts/build_app.sh
 ```
 
-Run the basic CLI regression test:
+### Running tests
 
 ```bash
-python3 -m unittest tests/test_cli_mode.py
+python3 -m unittest discover tests -v
 ```
 
 ## Project Structure
@@ -229,6 +229,10 @@ This repo is set up to be shareable:
 - Input/sample document folders used during local work are excluded.
 
 That keeps the public repo focused on the tool itself rather than personal data.
+
+## Attribution
+
+This project is a fork of [Gadamad/md-converter](https://github.com/Gadamad/md-converter).
 
 ## License
 
