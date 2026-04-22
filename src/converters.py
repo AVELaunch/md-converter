@@ -12,7 +12,6 @@ import re
 import shutil
 import socket
 import ssl
-import sys
 import time
 from datetime import date
 from pathlib import Path
@@ -237,19 +236,6 @@ def _get_marker_converter():
 
 
 # ---------------------------------------------------------------------------
-# Config path resolution
-# ---------------------------------------------------------------------------
-
-def _config_path() -> Path:
-    """Return the config.json path, respecting frozen builds."""
-    if getattr(sys, "frozen", False):
-        base = Path.home() / "Library" / "Application Support" / "MD Converter"
-        base.mkdir(parents=True, exist_ok=True)
-        return base / "config.json"
-    return Path(__file__).resolve().parent.parent / "config.json"
-
-
-# ---------------------------------------------------------------------------
 # OCR engine selection
 # ---------------------------------------------------------------------------
 
@@ -261,7 +247,8 @@ def _get_ocr_engine() -> str:
     """Return the effective OCR engine name."""
     if OCR_ENGINE is not None:
         return OCR_ENGINE
-    config = _config_path()
+    from paths import config_path
+    config = config_path()
     if config.exists():
         try:
             cfg = _json.loads(config.read_text(encoding="utf-8"))
