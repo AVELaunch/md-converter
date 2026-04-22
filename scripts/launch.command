@@ -1,4 +1,6 @@
 #!/bin/bash
-# launch.command -- Double-click in Finder to run MD Converter
-PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-"$PROJECT_DIR/.venv/bin/python3" "$PROJECT_DIR/src/converter_app.py"
+# Launcher for MD Converter — opens the webview app from the venv.
+# Double-click from Finder or run from Spotlight.
+cd "/Users/AVELaunch/Code/md-converter" || exit 1
+source .venv/bin/activate
+exec python src/converter_app.py
