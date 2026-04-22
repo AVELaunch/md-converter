@@ -15,6 +15,19 @@ from pathlib import Path
 
 logger = logging.getLogger("md_converter")
 
+# macOS: override the app identity so the Dock shows "MD Converter"
+# instead of the Python interpreter's name/icon.
+if sys.platform == "darwin":
+    try:
+        from Foundation import NSBundle
+        bundle = NSBundle.mainBundle()
+        info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
+        if info is not None:
+            info["CFBundleName"] = "MD Converter"
+            info["CFBundleDisplayName"] = "MD Converter"
+    except ImportError:
+        pass
+
 import webview
 
 from converters import SUPPORTED, ConvertResult, route, convert_pasted
