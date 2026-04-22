@@ -227,5 +227,66 @@ class TestSafeGet(unittest.TestCase):
                     self.assertIn("limit", str(ctx.exception).lower())
 
 
+class TestConvertPasted(unittest.TestCase):
+    def test_plain_text_produces_output(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = converters.convert_pasted("Hello world, this is a test.", Path(td))
+            self.assertTrue(r.success)
+            self.assertGreater(r.word_count, 0)
+            content = Path(r.output_path).read_text()
+            self.assertIn("# ", content)
+
+    def test_url_routes_through_html_path(self):
+        """A pasted URL should go through convert_html, not convert_raw_text."""
+        fake_result = converters.FetchResult(
+            content=b"<html><head><title>Pasted URL</title></head><body><p>Content.</p></body></html>",
+            encoding="utf-8",
+        )
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch("converters._safe_get", return_value=fake_result):
+                r = converters.convert_pasted("https://example.com/page", Path(td))
+            self.assertTrue(r.success)
+            content = Path(r.output_path).read_text()
+            self.assertIn("Pasted URL", content)
+
+    def test_empty_string_returns_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = converters.convert_pasted("", Path(td))
+            self.assertFalse(r.success)
+            self.assertEqual(r.word_count, 0)
+
+
+class TestRoute(unittest.TestCase):
+    def test_routes_pdf(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch("converters.convert_pdf", return_value=converters.ConvertResult(True, "/out.md", 10, "OK")) as m:
+                converters.route(str(FIXTURES / "sample.pdf"), Path(td))
+                m.assert_called_once()
+
+    def test_routes_docx(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch("converters.convert_docx", return_value=converters.ConvertResult(True, "/out.md", 10, "OK")) as m:
+                converters.route(str(FIXTURES / "sample.docx"), Path(td))
+                m.assert_called_once()
+
+    def test_routes_html_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch("converters.convert_html", return_value=converters.ConvertResult(True, "/out.md", 10, "OK")) as m:
+                converters.route(str(FIXTURES / "sample.html"), Path(td))
+                m.assert_called_once()
+
+    def test_routes_url(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch("converters.convert_html", return_value=converters.ConvertResult(True, "/out.md", 10, "OK")) as m:
+                converters.route("https://example.com/article", Path(td))
+                m.assert_called_once()
+
+    def test_unknown_extension_returns_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = converters.route("/tmp/file.xyz", Path(td))
+            self.assertFalse(r.success)
+            self.assertIn("Unsupported", r.message)
+
+
 if __name__ == "__main__":
     unittest.main()
